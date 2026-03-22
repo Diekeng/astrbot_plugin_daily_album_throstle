@@ -30,27 +30,34 @@ class WebSearchSource(AlbumSource):
 
     async def _search(self, prompt: str) -> str:
         """搜索并返回拼接好的文本片段，失败时返回空字符串"""
-        # 构造搜索关键词：提取 prompt 前 50 字作为 query 补充
         query = f"专辑推荐 {prompt[:50]}"
+        logger.info(f"[DailyAlbum] 开始联网搜索，query={query!r}")
 
         results: list[dict] = []
 
         # 1. 尝试 Tavily
         tavily_key = self._get_tavily_key()
         if tavily_key:
+            logger.debug("[DailyAlbum] 使用 Tavily 搜索")
             try:
                 results = await self._search_tavily(query, tavily_key)
+                logger.info(f"[DailyAlbum] Tavily 返回 {len(results)} 条结果")
             except Exception as e:
                 logger.warning(f"[DailyAlbum] Tavily 搜索失败：{e}，回退 Bing")
+        else:
+            logger.debug("[DailyAlbum] 未配置 Tavily key，跳过")
 
         # 2. 回退 Bing
         if not results:
+            logger.debug("[DailyAlbum] 使用 Bing 搜索")
             try:
                 results = await self._search_bing(query)
+                logger.info(f"[DailyAlbum] Bing 返回 {len(results)} 条结果")
             except Exception as e:
                 logger.warning(f"[DailyAlbum] Bing 搜索失败：{e}")
 
         if not results:
+            logger.warning("[DailyAlbum] 联网搜索无结果，将不附加参考信息")
             return "（未获取联网信息）"
 
         lines = []
@@ -59,7 +66,9 @@ class WebSearchSource(AlbumSource):
             content = r.get("content", r.get("snippet", ""))[:300]
             if title or content:
                 lines.append(f"【{title}】\n{content}")
-        return "\n\n".join(lines) if lines else "（未获取联网信息）"
+        snippets = "\n\n".join(lines) if lines else "（未获取联网信息）"
+        logger.debug(f"[DailyAlbum] 搜索片段长度：{len(snippets)} 字")
+        return snippets
 
     def _get_tavily_key(self) -> str:
         try:
