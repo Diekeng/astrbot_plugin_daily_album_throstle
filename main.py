@@ -233,24 +233,45 @@ class DailyAlbumPlugin(Star):
             text = "\n".join(lines)
 
         chain = MessageChain()
-
-        if album.netease_id.strip().isdigit():
-            from astrbot.core.message.components import Music
-
-            chain.chain.append(
-                Music(
-                    _type="163",
-                    id=int(album.netease_id),
-                    title=album.album_name,
-                    content=" / ".join(album.artist),
-                    image=album.cover_url if album.cover_url.startswith("http") else "",
-                )
-            )
-        elif album.cover_url.startswith("http"):
+        if album.cover_url.startswith("http"):
             chain.url_image(album.cover_url)
-
         chain.message(text)
         return chain
+
+    async def _send_music_card(self, session_str: str, netease_id: int) -> None:
+        """直接调用 aiocqhttp bot API 发送网易云音乐卡片"""
+        from astrbot.core.platform.message_session import MessageSession
+        from astrbot.core.platform.message_type import MessageType
+
+        try:
+            session = MessageSession.from_str(session_str)
+        except Exception:
+            return
+
+        platform = None
+        for p in self.ctx.platform_manager.platform_insts:
+            if p.meta().id == session.platform_name:
+                platform = p
+                break
+        if platform is None:
+            return
+
+        bot = getattr(platform, "bot", None)
+        if bot is None:
+            return  # 非 aiocqhttp 平台
+
+        payload = {
+            "message": [{"type": "music", "data": {"type": "163", "id": netease_id}}]
+        }
+        try:
+            if session.message_type == MessageType.GROUP_MESSAGE:
+                payload["group_id"] = int(session.session_id)
+                await bot.api.call_action("send_group_msg", **payload)
+            else:
+                payload["user_id"] = int(session.session_id)
+                await bot.api.call_action("send_private_msg", **payload)
+        except Exception as e:
+            logger.warning(f"[DailyAlbum] 音乐卡片发送失败：{e}")
 
     async def _send_to_sessions(self, album: AlbumInfo) -> None:
         sessions: list[str] = self.config.get("target_sessions", [])
@@ -261,6 +282,8 @@ class DailyAlbumPlugin(Star):
         chain = await self._build_chain(album)
         for session in sessions:
             try:
+                if album.netease_id.strip().isdigit():
+                    await self._send_music_card(session, int(album.netease_id))
                 await StarTools.send_message(session, chain)
                 logger.info(
                     f"[DailyAlbum] 已推送到 {session}：{album.album_name} / {album.artist}"
