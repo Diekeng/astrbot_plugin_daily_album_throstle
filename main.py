@@ -507,15 +507,25 @@ class DailyAlbumPlugin(Star):
 
     @filter.command("album_today")
     async def cmd_today(self, event: AstrMessageEvent):
-        """手动触发，推送到当前会话"""
+        """手动触发，推送到当前会话；可附带参数覆盖推荐偏好，如 /album_today 推荐一张emo专辑"""
         waiting = await self._generate_waiting_text(event.unified_msg_origin)
         yield event.plain_result(waiting)
         original_sessions = list(self.config.get("target_sessions", []))
+        original_prompt = self.config.get("recommend_prompt")
+        # 命令后的文本作为临时 prompt
+        custom_prompt = event.message_str.removeprefix("album_today").strip()
         self.config["target_sessions"] = [event.unified_msg_origin]
+        if custom_prompt:
+            self.config["recommend_prompt"] = custom_prompt
         try:
             await self._run_recommend()
         finally:
             self.config["target_sessions"] = original_sessions
+            if custom_prompt:
+                if original_prompt is None:
+                    self.config.pop("recommend_prompt", None)
+                else:
+                    self.config["recommend_prompt"] = original_prompt
         event.stop_event()
 
     @filter.command("album_history")
