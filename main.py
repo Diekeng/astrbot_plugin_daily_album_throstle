@@ -255,6 +255,7 @@ class DailyAlbumPlugin(Star):
         try:
             async with aiohttp.ClientSession(cookies={"appver": "2.0.2"}) as session:
                 # 1. 搜索专辑
+                logger.debug(f"[DailyAlbum] 网易云搜索专辑: keyword={keyword!r}")
                 async with session.post(
                     "http://music.163.com/api/search/get/web",
                     data={"s": keyword, "limit": 1, "type": 10, "offset": 0},
@@ -264,12 +265,16 @@ class DailyAlbumPlugin(Star):
 
                 albums = data.get("result", {}).get("albums", [])
                 if not albums:
-                    logger.warning(f"[DailyAlbum] 网易云专辑搜索无结果，keyword={keyword!r}")
+                    logger.warning(
+                        f"[DailyAlbum] 网易云专辑搜索无结果，keyword={keyword!r}"
+                    )
                     return None
 
                 album_id = albums[0]["id"]
                 album_title = albums[0].get("name", "")
-                logger.info(f"[DailyAlbum] 网易云搜索到专辑 ID={album_id}，专辑名={album_title!r}")
+                logger.info(
+                    f"[DailyAlbum] 网易云搜索到专辑 ID={album_id}，专辑名={album_title!r}"
+                )
 
                 # 2. 获取专辑详情，取第一首歌
                 async with session.get(
@@ -284,7 +289,9 @@ class DailyAlbumPlugin(Star):
                     return None
 
                 sid = str(songs[0]["id"])
-                logger.info(f"[DailyAlbum] 取专辑第一首歌 ID={sid}，歌名={songs[0].get('name', '')!r}")
+                logger.info(
+                    f"[DailyAlbum] 取专辑第一首歌 ID={sid}，歌名={songs[0].get('name', '')!r}"
+                )
                 return sid
         except Exception as e:
             logger.warning(f"[DailyAlbum] 网易云搜索失败：{e}")
