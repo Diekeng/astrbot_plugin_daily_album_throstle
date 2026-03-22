@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import cast
 
-from astrbot.api import logger
+from astrbot.api import llm_tool, logger
 from astrbot.api.event import AstrMessageEvent, MessageChain, filter
 from astrbot.api.star import Context, Star, StarTools
 
@@ -527,6 +527,28 @@ class DailyAlbumPlugin(Star):
                 else:
                     self.config["recommend_prompt"] = original_prompt
         event.stop_event()
+
+    @llm_tool("recommend_album")
+    async def tool_recommend_album(self, event: AstrMessageEvent, prompt: str = "") -> None:
+        """Recommend an album and send it to the current conversation. Use this when the user asks for music or album recommendations.
+
+        Args:
+            prompt(string): Optional. Describe the desired album style, genre, mood, or era. Leave empty to use the default recommendation preference.
+        """
+        original_sessions = list(self.config.get("target_sessions", []))
+        original_prompt = self.config.get("recommend_prompt")
+        self.config["target_sessions"] = [event.unified_msg_origin]
+        if prompt:
+            self.config["recommend_prompt"] = prompt
+        try:
+            await self._run_recommend()
+        finally:
+            self.config["target_sessions"] = original_sessions
+            if prompt:
+                if original_prompt is None:
+                    self.config.pop("recommend_prompt", None)
+                else:
+                    self.config["recommend_prompt"] = original_prompt
 
     @filter.command("album_history")
     async def cmd_history(self, event: AstrMessageEvent):
