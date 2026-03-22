@@ -247,20 +247,37 @@ class DailyAlbumPlugin(Star):
             text = "\n".join(lines)
 
         chain = MessageChain()
-        netease_id = await self._search_netease_album_id(album.album_name, album.artist)
-        if netease_id:
-            from astrbot.api.message_components import Share
-            chain.chain.append(Share(
-                url=f"https://music.163.com/#/album?id={netease_id}",
-                title=album.album_name,
-                content=" / ".join(album.artist),
-                image="",
-            ))
+        netease = await self._search_netease_album(album.album_name, album.artist)
+        if netease:
+            import hashlib
+            import time
+            from astrbot.api.message_components import Json
+            ctime = int(time.time())
+            token = hashlib.md5(f"{netease['id']}{ctime}".encode()).hexdigest()
+            card = {
+                "app": "com.tencent.tuwen.lua",
+                "bizsrc": "qqconnect.sdkshare",
+                "config": {"ctime": ctime, "forward": 1, "token": token, "type": "normal"},
+                "meta": {
+                    "news": {
+                        "desc": f"歌手：{' / '.join(album.artist)}",
+                        "jumpUrl": f"http://music.163.com/album/{netease['id']}/",
+                        "preview": netease["pic_url"],
+                        "tag": "网易云音乐",
+                        "tagIcon": "https://i.gtimg.cn/open/app_icon/00/49/50/85/100495085_100_m.png",
+                        "title": f"专辑：{album.album_name}",
+                    }
+                },
+                "prompt": f"[分享]专辑：{album.album_name}",
+                "ver": "0.0.0.1",
+                "view": "news",
+            }
+            chain.chain.append(Json(data=card))
         chain.message(text)
         return chain
 
-    async def _search_netease_album_id(self, album_name: str, artist: list[str]) -> str | None:
-        """搜索网易云音乐专辑，返回专辑 ID；失败返回 None"""
+    async def _search_netease_album(self, album_name: str, artist: list[str]) -> dict | None:
+        """搜索网易云专辑，返回 {id, pic_url}；失败返回 None"""
         import aiohttp
         keyword = f"{album_name} {' '.join(artist)}"
         try:
@@ -274,7 +291,8 @@ class DailyAlbumPlugin(Star):
                     data = await resp.json(content_type=None)
             albums = data.get("result", {}).get("albums", [])
             if albums:
-                return str(albums[0]["id"])
+                a = albums[0]
+                return {"id": str(a["id"]), "pic_url": a.get("picUrl", "")}
         except Exception as e:
             logger.warning(f"[DailyAlbum] 网易云搜索失败：{e}")
         return None
