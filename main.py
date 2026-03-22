@@ -334,9 +334,10 @@ class DailyAlbumPlugin(Star):
         )
         persona_prompt = (persona or {}).get("prompt", "")
         try:
+            now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             resp = await self.ctx.llm_generate(
                 chat_provider_id=provider.meta().id,
-                prompt="请用你自己的风格，说一句正在帮用户找今日专辑推荐、让对方稍等的话。直接输出这句话，不要加任何前缀或解释。",
+                prompt=f"现在是 {now}。请用你自己的风格，说一句正在帮用户找今日专辑推荐、让对方稍等的话。直接输出这句话，不要加任何前缀或解释。",
                 system_prompt=persona_prompt or "你是一个热爱音乐的推荐者。",
             )
             return resp.completion_text.strip()
