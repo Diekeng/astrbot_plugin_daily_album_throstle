@@ -10,11 +10,7 @@ from astrbot.api import logger
 
 from .base import AlbumInfo, AlbumSource
 
-SYSTEM_PROMPT = (
-    "你是专业的音乐编辑。你的输出必须是合法 JSON 对象，不含任何其他内容。\n"
-    "字段说明：netease_id 是该专辑在网易云音乐的 ID（纯数字字符串），"
-    "如果你不确定请留空字符串，不要猜测或编造。"
-)
+SYSTEM_PROMPT = "你是专业的音乐编辑。你的输出必须是合法 JSON 对象，不含任何其他内容。"
 
 
 def _make_output_format() -> str:
@@ -150,5 +146,4 @@ class LLMSource(AlbumSource):
             cover_url=str(data.get("cover_url", "")),
             description=str(data.get("description", "")),
             listen_tip=str(data.get("listen_tip", "")),
-            netease_id=str(data.get("netease_id", "")),
         )

@@ -247,39 +247,37 @@ class DailyAlbumPlugin(Star):
             text = "\n".join(lines)
 
         chain = MessageChain()
+        netease_id = await self._search_netease_album_id(album.album_name, album.artist)
+        if netease_id:
+            from astrbot.api.message_components import Share
+            chain.chain.append(Share(
+                url=f"https://music.163.com/#/album?id={netease_id}",
+                title=album.album_name,
+                content=" / ".join(album.artist),
+                image="",
+            ))
         chain.message(text)
         return chain
 
-    async def _send_music_card(self, session_str: str, netease_id: int) -> None:
-        """直接调用 aiocqhttp bot API 发送网易云音乐卡片"""
-        from astrbot.core.platform.message_session import MessageSession
-        from astrbot.core.platform.message_type import MessageType
-
+    async def _search_netease_album_id(self, album_name: str, artist: list[str]) -> str | None:
+        """搜索网易云音乐专辑，返回专辑 ID；失败返回 None"""
+        import aiohttp
+        keyword = f"{album_name} {' '.join(artist)}"
         try:
-            session = MessageSession.from_str(session_str)
-        except Exception:
-            return
-
-        platform = None
-        for p in self.ctx.platform_manager.platform_insts:
-            if p.meta().id == session.platform_name:
-                platform = p
-                break
-        if platform is None:
-            return
-
-        bot = getattr(platform, "bot", None)
-        if bot is None:
-            return  # 非 aiocqhttp 平台
-
-        message = [{"type": "music", "data": {"type": "163", "id": netease_id}}]
-        try:
-            if session.message_type == MessageType.GROUP_MESSAGE:
-                await bot.send_group_msg(group_id=int(session.session_id), message=message)
-            else:
-                await bot.send_private_msg(user_id=int(session.session_id), message=message)
+            async with aiohttp.ClientSession() as session:
+                async with session.post(
+                    "http://music.163.com/api/search/get/web",
+                    data={"s": keyword, "limit": 1, "type": 10, "offset": 0},
+                    cookies={"appver": "2.0.2"},
+                    timeout=aiohttp.ClientTimeout(total=8),
+                ) as resp:
+                    data = await resp.json(content_type=None)
+            albums = data.get("result", {}).get("albums", [])
+            if albums:
+                return str(albums[0]["id"])
         except Exception as e:
-            logger.warning(f"[DailyAlbum] 音乐卡片发送失败：{e}")
+            logger.warning(f"[DailyAlbum] 网易云搜索失败：{e}")
+        return None
 
     async def _send_to_sessions(self, album: AlbumInfo) -> None:
         sessions: list[str] = self.config.get("target_sessions", [])
@@ -290,8 +288,6 @@ class DailyAlbumPlugin(Star):
         chain = await self._build_chain(album, sessions[0])
         for session in sessions:
             try:
-                if album.netease_id.strip().isdigit():
-                    await self._send_music_card(session, int(album.netease_id))
                 await StarTools.send_message(session, chain)
                 logger.info(
                     f"[DailyAlbum] 已推送到 {session}：{album.album_name} / {album.artist}"

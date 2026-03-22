@@ -13,7 +13,6 @@ class AlbumInfo:
     cover_url: str = ""
     description: str = ""
     listen_tip: str = ""
-    netease_id: str = ""
 
 
 class AlbumSource(ABC):
