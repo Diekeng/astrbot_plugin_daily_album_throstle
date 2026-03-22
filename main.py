@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import random
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
@@ -352,9 +353,33 @@ class DailyAlbumPlugin(Star):
         persona_prompt = (persona or {}).get("prompt", "")
         try:
             now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            action = random.choice([
+                "正在翻找今日值得一听的专辑",
+                "在音乐库里帮你挑一张好专辑",
+                "正在为你筛选今日的专辑推荐",
+                "正在从浩瀚的唱片里帮你找一张",
+                "稍微想了想，正在为你选一张专辑",
+            ])
+            wait = random.choice([
+                "稍等一下",
+                "请稍候",
+                "马上就来",
+                "等我一会儿",
+                "等一下下",
+            ])
+            style = random.choice([
+                "用你自己的风格说这件事",
+                "随性地表达",
+                "带点你的个性说出来",
+                "用你惯常的口吻说",
+            ])
+            prompt = (
+                f"现在是 {now}。{action}，需要让用户{wait}。"
+                f"请{style}，直接输出这句话，不要加任何前缀或解释。"
+            )
             resp = await self.ctx.llm_generate(
                 chat_provider_id=provider.meta().id,
-                prompt=f"现在是 {now}。请用你自己的风格，说一句正在帮用户找今日专辑推荐、让对方稍等的话。直接输出这句话，不要加任何前缀或解释。",
+                prompt=prompt,
                 system_prompt=persona_prompt or "你是一个热爱音乐的推荐者。",
             )
             return resp.completion_text.strip()
