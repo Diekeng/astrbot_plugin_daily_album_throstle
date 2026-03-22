@@ -159,7 +159,7 @@ class DailyAlbumPlugin(Star):
             album = None
             rejected: list[AlbumInfo] = []
             for attempt in range(1, MAX_RETRIES + 1):
-                source = select_source(self.context, self.config)
+                source = select_source(self.ctx, self.config)
                 candidate = await source.fetch(prompt, history_list + rejected)
                 if not candidate:
                     logger.error("[DailyAlbum] 来源未能返回有效专辑，本次跳过")
@@ -249,9 +249,12 @@ class DailyAlbumPlugin(Star):
         chain.message(text)
         return chain
 
-    async def _search_netease_song_id(self, album_name: str, artist: list[str]) -> str | None:
+    async def _search_netease_song_id(
+        self, album_name: str, artist: list[str]
+    ) -> str | None:
         """搜索网易云，返回专辑第一首歌的歌曲 ID；失败返回 None"""
         import aiohttp
+
         keyword = f"{album_name} {' '.join(artist)}"
         try:
             async with aiohttp.ClientSession() as session:
@@ -265,7 +268,9 @@ class DailyAlbumPlugin(Star):
             songs = data.get("result", {}).get("songs", [])
             if songs:
                 sid = str(songs[0]["id"])
-                logger.info(f"[DailyAlbum] 网易云搜索到歌曲 ID={sid}，歌名={songs[0].get('name', '')!r}")
+                logger.info(
+                    f"[DailyAlbum] 网易云搜索到歌曲 ID={sid}，歌名={songs[0].get('name', '')!r}"
+                )
                 return sid
             logger.warning(f"[DailyAlbum] 网易云搜索无结果，keyword={keyword!r}")
         except Exception as e:
@@ -293,13 +298,21 @@ class DailyAlbumPlugin(Star):
         if bot is None:
             return
 
-        payload = {"message": [{"type": "music", "data": {"type": "163", "id": song_id}}]}
+        payload = {
+            "message": [{"type": "music", "data": {"type": "163", "id": song_id}}]
+        }
         try:
             if session.message_type == MessageType.GROUP_MESSAGE:
-                await bot.api.call_action("send_group_msg", group_id=int(session.session_id), **payload)
+                await bot.api.call_action(
+                    "send_group_msg", group_id=int(session.session_id), **payload
+                )
             else:
-                await bot.api.call_action("send_private_msg", user_id=int(session.session_id), **payload)
-            logger.info(f"[DailyAlbum] 音乐卡片已发送：song_id={song_id} → {session_str}")
+                await bot.api.call_action(
+                    "send_private_msg", user_id=int(session.session_id), **payload
+                )
+            logger.info(
+                f"[DailyAlbum] 音乐卡片已发送：song_id={song_id} → {session_str}"
+            )
         except Exception as e:
             logger.warning(f"[DailyAlbum] 音乐卡片发送失败：{e}")
 
