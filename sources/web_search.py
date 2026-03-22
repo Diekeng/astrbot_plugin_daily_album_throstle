@@ -4,6 +4,7 @@ import aiohttp
 
 from astrbot.api import logger
 
+from . import extract_search_query
 from .base import AlbumInfo, AlbumSource
 from .llm import LLMSource
 
@@ -30,8 +31,9 @@ class WebSearchSource(AlbumSource):
 
     async def _search(self, prompt: str) -> str:
         """搜索并返回拼接好的文本片段，失败时返回空字符串"""
-        query = f"专辑推荐 {prompt[:50]}"
-        logger.info(f"[DailyAlbum] 开始联网搜索，query={query!r}")
+        keywords = await extract_search_query(self._context, prompt)
+        query = f"专辑推荐 {keywords}"
+        logger.info(f"[DailyAlbum] 开始联网搜索，query={query!r}...")
 
         results: list[dict] = []
 
