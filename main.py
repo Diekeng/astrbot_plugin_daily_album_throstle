@@ -309,9 +309,9 @@ class DailyAlbumPlugin(Star):
         chain = await self._build_chain(album, sessions[0])
         for session in sessions:
             try:
+                await StarTools.send_message(session, chain)
                 if song_id:
                     await self._send_music_card(session, song_id)
-                await StarTools.send_message(session, chain)
                 logger.info(
                     f"[DailyAlbum] 已推送到 {session}：{album.album_name} / {album.artist}"
                 )
@@ -323,10 +323,31 @@ class DailyAlbumPlugin(Star):
     # 命令
     # -------------------------------------------------------------------------
 
+    async def _generate_waiting_text(self, umo: str) -> str:
+        provider = self.ctx.get_using_provider()
+        if not provider:
+            return "正在生成今日专辑推荐，请稍候..."
+        _, persona, _, _ = await self.ctx.persona_manager.resolve_selected_persona(
+            umo=umo,
+            conversation_persona_id=None,
+            platform_name=umo.split(":", 1)[0],
+        )
+        persona_prompt = (persona or {}).get("prompt", "")
+        try:
+            resp = await self.ctx.llm_generate(
+                chat_provider_id=provider.meta().id,
+                prompt="请用你自己的风格，说一句正在帮用户找今日专辑推荐、让对方稍等的话。直接输出这句话，不要加任何前缀或解释。",
+                system_prompt=persona_prompt or "你是一个热爱音乐的推荐者。",
+            )
+            return resp.completion_text.strip()
+        except Exception:
+            return "正在生成今日专辑推荐，请稍候..."
+
     @filter.command("album_today")
     async def cmd_today(self, event: AstrMessageEvent):
         """手动触发，推送到当前会话"""
-        yield event.plain_result("正在生成今日专辑推荐，请稍候...")
+        waiting = await self._generate_waiting_text(event.unified_msg_origin)
+        yield event.plain_result(waiting)
         original_sessions = list(self.config.get("target_sessions", []))
         self.config["target_sessions"] = [event.unified_msg_origin]
         try:
