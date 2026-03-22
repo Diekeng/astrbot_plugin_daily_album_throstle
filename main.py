@@ -387,16 +387,20 @@ class DailyAlbumPlugin(Star):
 
         song_id = await self._search_netease_song_id(album.album_name, album.artist)
         chain = await self._build_chain(album, sessions[0])
+        hint_chain = None
         if not song_id:
             hint = await self._generate_not_found_hint(
                 album.album_name, album.artist, sessions[0]
             )
-            chain.message(hint)
+            hint_chain = MessageChain().message(hint)
         for session in sessions:
             try:
                 await StarTools.send_message(session, chain)
                 if song_id:
                     await self._send_music_card(session, song_id)
+                elif hint_chain:
+                    await asyncio.sleep(1)
+                    await StarTools.send_message(session, hint_chain)
                 logger.info(
                     f"[DailyAlbum] 已推送到 {session}：{album.album_name} / {album.artist}"
                 )
@@ -426,7 +430,7 @@ class DailyAlbumPlugin(Star):
                 prompt=(
                     f"今日推荐的专辑是《{album_name}》，艺术家：{', '.join(artist)}。"
                     "在网易云音乐上没有找到这张专辑。"
-                    "请用你自己的风格，说一句让用户可以去其他平台"
+                    "请用你自己的风格，告知用户没有找到, 可以去其他平台"
                     "自行搜索的提示。直接输出这句话，不要加任何前缀或解释。"
                 ),
                 system_prompt=persona_prompt or "你是一个热爱音乐的推荐者。",
