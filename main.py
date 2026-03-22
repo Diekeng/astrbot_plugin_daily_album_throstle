@@ -530,10 +530,10 @@ class DailyAlbumPlugin(Star):
 
     @llm_tool("recommend_album")
     async def tool_recommend_album(self, event: AstrMessageEvent, prompt: str = "") -> None:
-        """Recommend an album and send it to the current conversation. Use this when the user asks for music or album recommendations.
+        """推荐一张专辑并发送到当前会话。当用户希望获得音乐或专辑推荐时调用此工具。
 
         Args:
-            prompt(string): Optional. Describe the desired album style, genre, mood, or era. Leave empty to use the default recommendation preference.
+            prompt(string): 可选。描述期望的专辑风格、流派、情绪或年代等偏好。留空则使用默认推荐偏好。
         """
         original_sessions = list(self.config.get("target_sessions", []))
         original_prompt = self.config.get("recommend_prompt")
