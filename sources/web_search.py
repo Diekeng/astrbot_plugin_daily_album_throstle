@@ -4,9 +4,9 @@ import aiohttp
 
 from astrbot.api import logger
 
-from . import extract_search_query
 from .base import AlbumInfo, AlbumSource
 from .llm import LLMSource
+from .query_extractor import extract_search_query
 
 _SEARCH_TIMEOUT = aiohttp.ClientTimeout(total=15)
 
@@ -143,7 +143,9 @@ class WebSearchSource(AlbumSource):
                     {
                         "title": title_el.get_text(strip=True),
                         "url": title_el.get("href", ""),
-                        "content": snippet_el.get_text(strip=True) if snippet_el else "",
+                        "content": snippet_el.get_text(strip=True)
+                        if snippet_el
+                        else "",
                     }
                 )
         return results
