@@ -1,4 +1,4 @@
-name: astrbot_plugin_daily_album
+name: astrbot_plugin_daily_album_throstle
 desc: 每日专辑推荐 - 定时向指定会话推送一张专辑推荐，支持 LLM、联网搜索、自定义脚本三种来源
 help: |
   /album_today  - 手动触发并推送专辑推荐到当前会话

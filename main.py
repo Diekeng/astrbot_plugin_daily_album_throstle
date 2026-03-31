@@ -1,5 +1,5 @@
 """
-astrbot_plugin_daily_album - 每日专辑推荐插件
+astrbot_plugin_daily_album_throstle - 每日专辑推荐插件 (Throstle Fork)
 
 每天定时向配置的群/私聊推送一张专辑推荐。
 专辑来源可插拔：llm（纯 LLM）、web_search（联网+LLM）、script（用户自定义脚本）。
@@ -21,7 +21,7 @@ from astrbot.api.star import Context, Star, StarTools
 
 from .sources import AlbumInfo, select_source
 
-PLUGIN_NAME = "astrbot_plugin_daily_album"
+PLUGIN_NAME = "astrbot_plugin_daily_album_throstle"
 HISTORY_FILE = "album_history.json"
 
 
@@ -29,6 +29,37 @@ def _dedup_key(album_name: str, artist: list[str]) -> str:
     """生成去重 key，忽略大小写和首尾空格"""
     artist_key = ",".join(a.strip().lower() for a in artist)
     return f"{album_name.strip().lower()}:{artist_key}"
+
+
+_CORE_KW_SEPARATORS = re.compile(r"[～~！!|｜/＼\\\-]+")
+_STRIP_CHARS = "《》[]【】「」『』()（）\"'\u3000 \t"
+
+
+def _extract_core_keyword(album_name: str) -> str:
+    """从长专辑名中提取最具辨识度的核心关键词。
+
+    策略：
+    1. 去除书名号外层包裹（《》）
+    2. 按常见分隔符切割，取每段去首尾标点后的最长非空片段
+    3. 如果最终结果与原名一致（去标点后），返回空字符串表示无需特殊处理
+    """
+    # 去掉最外层书名号
+    name = album_name.strip().strip("《》")
+    # 按分隔符切割
+    parts = _CORE_KW_SEPARATORS.split(name)
+    # 清理每段首尾杂字符
+    cleaned = [p.strip(_STRIP_CHARS) for p in parts]
+    # 过滤空串，取最长片段（通常是最有辨识度的副标题）
+    non_empty = [p for p in cleaned if p]
+    if not non_empty:
+        return ""
+    # 优先取最后一段（副标题规律），若最后一段太短（<2字）则取最长段
+    candidate = non_empty[-1] if len(non_empty[-1]) >= 2 else max(non_empty, key=len)
+    # 若候选词与原始专辑名去标点后相同，说明没有提取到更短的关键词
+    original_stripped = album_name.strip(_STRIP_CHARS)
+    if candidate == original_stripped:
+        return ""
+    return candidate
 
 
 class DailyAlbumPlugin(Star):
@@ -74,7 +105,7 @@ class DailyAlbumPlugin(Star):
             try:
                 return json.loads(self._history_path.read_text(encoding="utf-8"))
             except Exception as e:
-                logger.warning(f"[DailyAlbum] 读取历史文件失败：{e}，使用空历史")
+                logger.warning(f"[DailyAlbum-Throstle] 读取历史文件失败：{e}，使用空历史")
         return {"last_push_date": "", "records": [], "seen_keys": []}
 
     def _save_history(self) -> None:
@@ -84,7 +115,7 @@ class DailyAlbumPlugin(Star):
                 encoding="utf-8",
             )
         except Exception as e:
-            logger.error(f"[DailyAlbum] 写入历史文件失败：{e}")
+            logger.error(f"[DailyAlbum-Throstle] 写入历史文件失败：{e}")
 
     # -------------------------------------------------------------------------
     # 定时任务
@@ -124,6 +155,34 @@ class DailyAlbumPlugin(Star):
         await self._run_recommend()
 
     # -------------------------------------------------------------------------
+    # 偏好 Prompt 选取
+    # -------------------------------------------------------------------------
+
+    _DEFAULT_PROMPT = (
+        "请推荐一张值得深度聆听的经典或当代优秀专辑，涵盖各种音乐风格，注重艺术性和可听性。"
+    )
+
+    def _pick_recommend_prompt(self) -> str:
+        """从偏好风格池中随机选取一条 prompt。
+
+        - 若配置为列表：过滤空项，从剩余条目随机选取；若列表为空则用默认值
+        - 若配置为字符串（向后兼容）：直接使用
+        - 若未配置：使用默认值
+        """
+        raw = self.config.get("recommend_prompt", self._DEFAULT_PROMPT)
+        if isinstance(raw, list):
+            pool = [s for s in raw if isinstance(s, str) and s.strip()]
+            if not pool:
+                logger.warning("[DailyAlbum] 偏好风格池为空，使用默认 prompt")
+                return self._DEFAULT_PROMPT
+            chosen = random.choice(pool)
+            logger.info(f"[DailyAlbum] 随机选取偏好风格：{chosen!r}")
+            return chosen
+        if isinstance(raw, str) and raw.strip():
+            return raw.strip()
+        return self._DEFAULT_PROMPT
+
+    # -------------------------------------------------------------------------
     # 核心推荐流程
     # -------------------------------------------------------------------------
 
@@ -144,10 +203,7 @@ class DailyAlbumPlugin(Star):
             ]
             seen_keys: set[str] = set(self._history.get("seen_keys", []))
 
-            prompt = self.config.get(
-                "recommend_prompt",
-                "请推荐一张值得深度聆听的经典或当代优秀专辑，涵盖各种音乐风格，注重艺术性和可听性。",
-            )
+            prompt = self._pick_recommend_prompt()
 
             # 去重重试：rejected 列表追加到 history 末尾，让模型看到刚才被拒的专辑
             MAX_RETRIES = 3
@@ -281,8 +337,12 @@ class DailyAlbumPlugin(Star):
         max_attempts = int(self.config.get("netease_search_max_attempts", 3))
         timeout = aiohttp.ClientTimeout(total=8)
 
-        # 依次尝试的关键词：先"专辑名 艺术家"，再纯"专辑名"
+        # 依次尝试的关键词：先提取的核心词（如有），再"专辑名 艺术家"，最后纯"专辑名"
         keywords = [f"{album_name} {' '.join(artist)}", album_name]
+        core_kw = _extract_core_keyword(album_name)
+        if core_kw and core_kw != album_name:
+            keywords.insert(0, core_kw)
+            logger.info(f"[DailyAlbum] 提取核心关键词：{core_kw!r}（原名：{album_name!r}）")
 
         try:
             async with aiohttp.ClientSession(cookies={"appver": "2.0.2"}) as session:
