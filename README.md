@@ -1,12 +1,13 @@
 # astrbot_plugin_daily_album 🎵
-
+> 这是 `astrbot_plugin_daily_album` 的个人练习Fork,优化了搜索体验并新增了风格偏好池
 每天给你推一张专辑！用 LLM 挑专辑、写文案，还能顺手发个网易云音乐卡片——
 不管是吃饭、通勤、或者发呆的时候，都有好东西听(｡•̀ᴗ-)✧
 
 ---
 
 ## 能做什么
-
+- **风格偏好池**：支持配置多个推荐风格描述，每天随机抽取一条，拒绝单调！
+- **核心词提取**：自动从长名称（如日系 Live 专辑）提取核心关键词，搜索更精准。
 - 每天定时向配置的群或私聊推送一张专辑推荐
 - 文案由 LLM 用当前人格的口吻生成，每次都不一样
 - 自动去网易云搜对应专辑，发音乐卡片（aiocqhttp 平台专属）
@@ -35,7 +36,7 @@
 |------|------|--------|------|
 | `target_sessions` | list | `[]` | 要推送的会话，填 `unified_msg_origin` 格式，比如 `aiocqhttp:GroupMessage:123456` |
 | `push_time` | string | `10:00` | 几点推，格式 `HH:MM`（服务器时区） |
-| `recommend_prompt` | string | 见下 | 告诉 LLM 你想要什么风格的专辑 |
+| `recommend_prompt` | list | **风格池** | **[New]** 推荐偏好池列表，每次随机抽一条使用。 |
 | `max_history_in_prompt` | int | `30` | 给 LLM 看的历史推荐条数，越多越不容易重复 |
 | `source_llm_enabled` / `_weight` | bool / int | `true` / `1` | LLM 来源的开关和权重 |
 | `source_web_search_enabled` / `_weight` | bool / int | `true` / `2` | 联网搜索来源的开关和权重 |
@@ -78,9 +79,11 @@ async def fetch_album(prompt: str, history: list[dict]) -> dict:
 
 找专辑这件事比想象中复杂一点，大概是这样：
 
-1. 先用「专辑名 + 艺术家」搜索，拿最多 `netease_search_max_attempts` 条候选
-2. 对每条候选问 LLM：这是不是目标专辑？（Deluxe Edition、Remastered 之类的版本算匹配）
-3. 第一轮全没匹配到？退一步只用「专辑名」再搜一次
-4. 还是找不到的话，会另发一条消息告诉你去哪里手动搜
+1. **核心关键词提取**：自动将 `《Love Live! ... ～μ'sic Forever...～》` 简化为 `μ'sic Forever...`。
+2. **三段式搜索**：`核心词` → `全名 + 艺术家` → `全名`。
+3. **LLM 二次核验**：对搜索结果进行智能比对，确保版本（Deluxe/Remastered）匹配。
 
 > 音乐卡片只在 aiocqhttp（NapCat / LLOneBot）下能用，其他平台会静默跳过，不影响文案发送。
+
+
+感谢原作者 [wanger](https://github.com/10knamesmore/astrbot_plugin_daily_album) 。本仓库为个人学习分支。  
